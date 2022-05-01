@@ -1,0 +1,145 @@
+from collections import Counter
+import cv2
+import os
+import glob
+import skimage
+import numpy as np
+import pandas as pd
+import seaborn as sn
+import preprocessing
+from tqdm import tqdm
+from PIL import Image
+from os import listdir
+import keras
+import matplotlib.pyplot as plt
+from skimage.transform import resize
+from collections import Counter
+sn.set()
+from sklearn.pipeline import make_pipeline
+from sklearn.pipeline import Pipeline
+from sklearn.svm import SVC # SVC
+from sklearn import metrics
+from sklearn.utils import shuffle
+from sklearn import metrics
+from sklearn.metrics import confusion_matrix, classification_report, accuracy_score,f1_score,recall_score,cohen_kappa_score,precision_score
+from sklearn.utils import compute_class_weight
+from sklearn.preprocessing import MinMaxScaler,LabelBinarizer
+from sklearn.model_selection import train_test_split
+import tensorflow as tf
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.metrics import AUC
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.layers import Input, Dense, Dropout, BatchNormalization, Flatten, Activation, GlobalAveragePooling2D,Conv2D, MaxPooling2D
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+
+
+#preprocessing data
+images=[]
+labels=[]
+feature_dictionary = {
+    'label': tf.io.FixedLenFeature([], tf.int64),
+    'label_normal': tf.io.FixedLenFeature([], tf.int64),
+    'image': tf.io.FixedLenFeature([], tf.string)
+    }
+def _parse_function(example, feature_dictionary=feature_dictionary):
+    parsed_example = tf.io.parse_example(example, feature_dictionary)
+    return parsed_example
+
+def read_data(filename):
+    full_dataset = tf.data.TFRecordDataset(filename,num_parallel_reads=tf.data.experimental.AUTOTUNE)
+    full_dataset = full_dataset.shuffle(buffer_size=31000)
+    full_dataset = full_dataset.cache()
+    print("Size of Training Dataset: ", len(list(full_dataset)))
+    
+    feature_dictionary = {
+    'label': tf.io.FixedLenFeature([], tf.int64),
+    'label_normal': tf.io.FixedLenFeature([], tf.int64),
+    'image': tf.io.FixedLenFeature([], tf.string)
+    }   
+
+    full_dataset = full_dataset.map(_parse_function, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    print(full_dataset)
+    for image_features in full_dataset:
+        image = image_features['image'].numpy()
+        image = tf.io.decode_raw(image_features['image'], tf.uint8)
+        image = tf.reshape(image, [299, 299])        
+        image=image.numpy()
+        #image=cv2.resize(image,(100,100))
+        #image=cv2.merge([image])        
+        #plt.imshow(image)
+        images.append(image)
+        labels.append(image_features['label_normal'].numpy())
+   filenames=['.../input/ddsm-mammography/training10/training100.tfrecords',
+              '.../input/ddsm-mammography/training10_1/training10_1.tfrecords',
+              '.../input/ddsm-mammography/training10_2/training10_2.tfrecords',
+              '.../input/ddsm-mammography/training10_3/training10_3.tfrecords',
+              '.../input/ddsm-mammography/training10_4/training10_4.tfrecords'
+             ]
+
+for file in filenames:
+    read_data(file)
+
+X=np.array(images)
+y=np.array(labels)
+x_train, x_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=189,shuffle=True)
+y_test = to_categorical(y_test)
+y_train = to_categorical(y_train)
+
+plt.imshow(x_train[1])
+print(y_train[1])
+
+import numpy as np
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Activation, Conv2D, MaxPool2D, Flatten
+from keras import optimizers
+from keras import losses
+from sklearn import metrics
+print(x_train[0].shape)
+
+input_shape = x_train[0].shape
+model = keras.Sequential(
+    [
+    keras.Input(shape = input_shape),
+    keras.layers.Reshape((299,299,1)),
+    keras.layers.Conv2D(25, kernel_size = (10,10), activation = 'relu'),
+    keras.layers.MaxPooling2D(pool_size = (4,4)),
+    keras.layers.Conv2D(25, kernel_size = (2,2), activation = 'relu'),
+    keras.layers.MaxPooling2D(pool_size = (2,2)),
+    keras.layers.Dense(20, activation='relu'),
+    keras.layers.Flatten(),
+    keras.layers.Dense(2, activation='sigmoid'),
+    keras.layers.Flatten(),
+    ]
+    )
+
+model.summary()
+batch_size = 64
+epochs = 20
+
+model.compile(loss="binary_crossentropy", optimizer= "adam", metrics=["accuracy"])
+
+model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, validation_split=0.1)
+
+
+predict = model.predict(x_test)
+print(len(predict))
+Y_pred = predict
+Y_pred_classes = np.argmax(Y_pred,axis = 1) 
+Y_true = np.argmax(y_test,axis = 1) 
+import seaborn as sns
+
+confusion_mtx = confusion_matrix(Y_true, Y_pred_classes) 
+f,ax = plt.subplots(figsize=(8, 8))
+sns.heatmap(confusion_mtx, annot=True, linewidths=0.01,cmap="OrRd",linecolor="black", fmt= '.1f',ax=ax)
+plt.xlabel("Predicted Label")
+plt.ylabel("True Label")
+plt.title("Confusion Matrix")
+plt.show()
+
+MyList = Y_pred_classes
+stringlist = []
+for entry in predict:
+    stringlist.append(np.array2string(entry))
+duplicate_dict = Counter(stringlist)
+print(duplicate_dict)
