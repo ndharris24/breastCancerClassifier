@@ -136,10 +136,3 @@ plt.xlabel("Predicted Label")
 plt.ylabel("True Label")
 plt.title("Confusion Matrix")
 plt.show()
-
-MyList = Y_pred_classes
-stringlist = []
-for entry in predict:
-    stringlist.append(np.array2string(entry))
-duplicate_dict = Counter(stringlist)
-print(duplicate_dict)
